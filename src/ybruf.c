@@ -71,7 +71,7 @@ static bool app_initialize(int argn, char *argv[])
  */
 static void app_terminate(int signo)
 {
-  if (signo==10){
+  if (signo==SIGUSR1){
     done = true;
   }
   else{
