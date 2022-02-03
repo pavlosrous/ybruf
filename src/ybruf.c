@@ -2,6 +2,10 @@
 #include <signal.h>
 
 #include "/home/prousoglou/Desktop/ClonedRep/bravo-project/include/ybruf.h"
+//-----------------------------------ISSUES------------------------------------------------------
+//When trying to connect to ports up to 1000, I would get "bind/listen: Permission denied"
+//When I terminate with -USR1 and then try to reconect to the same port number when I relunch, I get "Already in use"
+
 
 // Global parameters
 const int MIN_SERVERS = 3, MAX_SERVERS = 10;
