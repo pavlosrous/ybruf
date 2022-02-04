@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <signal.h>
 
+//#include "/Users/Tien 1/Desktop/bravo-project/include/ybruf.h"
 #include "ybruf.h"
 //-----------------------------------ISSUES------------------------------------------------------
 //When trying to connect to ports up to 1000, I would get "bind/listen: Permission denied"
@@ -42,7 +43,7 @@ static bool app_initialize(int argn, char *argv[])
   /* 2 */
   if (chdir(APP_WD) != 0) //returns -1 if it fails
   {
-    perror("chdir() to APP_WD failed\n");
+    perror(APP_WD);
     return false;
   }
 
@@ -53,7 +54,7 @@ static bool app_initialize(int argn, char *argv[])
 
   if (fptr == NULL)
   {
-    perror("File cannot be created or a case of a write error\n");
+    perror("File cannot be created or a case of a write error\n"); //need to make changes to the dir
     return false;
   }
   
