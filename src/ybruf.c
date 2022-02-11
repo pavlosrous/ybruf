@@ -1,11 +1,12 @@
 #include <netinet/in.h>
+#include <syslog.h>
 #include <signal.h>
 
 #include "ybruf.h"
 
-
 // Global parameters
 const int MIN_SERVERS = 3, MAX_SERVERS = 10;
+const int MAX_RQ_SIZE = 1048576; // 1MB
 
 // Port for the server
 static int PORT = 8000;
@@ -15,51 +16,32 @@ static bool done = false;
 
 static bool app_initialize(int argn, char *argv[])
 {
-  /* 1 */
-  if (argn > 2)
-  {
-    perror("More than 2 arguments\n");
+  /* Check usage */
+  // More than one arg OR one arg AND not a positive number?
+  if ((argn > 2) || ((argn == 2) && ((PORT = atoi(argv[1])) <= 0))) {
+    fprintf(stderr, "USAGE: %s [port-number]\n", argv[0]);
     return false;
   }
 
-  else if (argn == 2)
-  {
-    int p2 = atoi(argv[1]); //coverting the second parameter into an integer
-    if (p2 < 0)
-    {
-      fprintf(stderr, "Usage: %s [%s]\n", argv[0],argv[1]);
-      return false;
-    }
-    else
-    {
-      PORT = p2;
-    }
-  }
-
-  /* 2 */
-  if (chdir(APP_WD) != 0) //returns -1 if it fails
-
-  {
-    perror(APP_WD); //ERROR: directory doesn't exist
-    return false;
-  }
-
-  /* 3 */
-  FILE *fptr;
-  char *filename = APP_NAME ".pid";
-
-  fptr = fopen(filename, "w");
-
-  if (fptr == NULL)
-  {
-    perror(filename); //ERROR: file cannot be created
+  /* Change working directory */
+  if (-1 == chdir(APP_WD)) {
+    perror(APP_WD);
     return false;
   }
   
-  int server_ID = getpid();
-  fprintf(fptr, "%d", server_ID);
-  fclose(fptr);
-  /* 4 */
+  /* Save the process ID */
+  FILE *pidfile;
+  if (!(pidfile = fopen(APP_PIDFILE, "w"))) {
+    perror(APP_PIDFILE);
+    return false;
+  } else {
+    fprintf(pidfile, "%d", getpid());
+    fclose(pidfile);
+  }
+
+  /* Log the initialization message */
+  // -- YOUR CODE HERE --
+
   return true;
 }
 
@@ -69,71 +51,69 @@ static bool app_initialize(int argn, char *argv[])
  */
 static void app_terminate(int signo)
 {
-  if (signo==SIGUSR1){
-    done = true;
-  }
-  else{
-    exit(EXIT_SUCCESS);
-  }
+  // Log the termination signal
+  // -- YOUR CODE HERE --
 
-  
-#ifdef DEBUG
-  fprintf(stderr, "Terminated by %d\n", signo);
-#endif
+  switch (signo) {
+  case SIGUSR1:			// "Soft" termination
+    done = true;
+    break;
+  case SIGUSR2:			// "Hard" termination
+    exit(EXIT_SUCCESS);
+  default:			// Do nothing
+    break;
+  }
 }
 
-// The main function
+// Request processor
+bool process_request(int sock_id)
+{
+  // -- YOUR CODE HERE --
+  return true;  
+}
+
+// The main function 
 int main(int argn, char *argv[])
 {
-
+  // Inilialize the process
   bool status = app_initialize(argn, argv);
   if (status == false)
     return EXIT_FAILURE;
 
   // Create a socket
-  struct sockaddr_in serv_addr, cli_addr;
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0); 
- 
-  if (-1 == sockfd)
-  {
-    perror("socket");
+  struct sockaddr_in serv_addr, cli_addr; 
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (-1 == sockfd) {
+    // -- YOUR CODE HERE --
     return EXIT_FAILURE;
   }
 
- 
-  bzero((char *)&serv_addr, sizeof(serv_addr));
-
-  serv_addr.sin_family = AF_INET; 
-
-  serv_addr.sin_addr.s_addr = INADDR_ANY; 
-
-  serv_addr.sin_port = htons(PORT); 
-
-  if (-1 == bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) || -1 == listen(sockfd, 5 /* backlog */))
-  {
-    perror("bind/listen");
+  // Bind the socket and start listening on it
+  bzero((char *) &serv_addr, sizeof(serv_addr));
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_addr.s_addr = INADDR_ANY;
+  serv_addr.sin_port = htons(PORT);
+  if (   -1 == bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))
+      || -1 == listen(sockfd, 5 /* backlog */)) {
+    // -- YOUR CODE HERE --
     return EXIT_FAILURE;
   }
 
+  // Register the signal handler(s)
   signal(SIGUSR1, app_terminate);
   signal(SIGUSR2, app_terminate);
 
   // The main loop
-  while (!done)
-  {
+  while (!done) {
     unsigned clilen = sizeof(cli_addr);
     int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-    
-    if (-1 == newsockfd)
-    { // What can we do? Cannot even print an error message
-#ifdef DEBUG
-      perror("accept");
-#endif
+    if (-1 == newsockfd) { // Scrap it
+      // -- YOUR CODE HERE --
       continue;
     }
-    fputs("Hello, world!\n", stderr);
-  }
-  close(sockfd);
-  return EXIT_SUCCESS;
 
+    process_request(newsockfd);
+  }
+  return EXIT_SUCCESS;
 }
+
