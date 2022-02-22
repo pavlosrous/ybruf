@@ -39,7 +39,7 @@ static bool app_initialize(int argn, char *argv[])
     fclose(pidfile);
   }
 
-  syslog(LOG_INFO,"Started on port %d", PORT);
+  syslog(LOG_INFO,"Started on port %d", PORT);//include info in log file
 
   return true;
 }
@@ -50,7 +50,7 @@ static bool app_initialize(int argn, char *argv[])
  */
 static void app_terminate(int signo)
 {
-  syslog(LOG_INFO,"Terminated by the signal %d", signo);
+  syslog(LOG_INFO,"Terminated by the signal %d", signo); //include info in log file
 
   switch (signo) {
   case SIGUSR1:			// "Soft" termination
@@ -67,9 +67,9 @@ static void app_terminate(int signo)
 bool process_request(int sock_id)
 {
   char buff[MAX_RQ_SIZE];
-  char* header = "HTTP/1.1 200 OK\r\n\r\n";
+  char* header = "HTTP/1.1 200 OK\r\n\r\n"; 
 
-  int read_status = read(sock_id,buff,MAX_RQ_SIZE);
+  int read_status = read(sock_id,buff,MAX_RQ_SIZE);//reading client request
 
   if (read_status == -1){
     syslog(LOG_ERR,"Reading buffer: %s",strerror(errno));
@@ -77,11 +77,11 @@ bool process_request(int sock_id)
   }
 
 
-  int write_header = write(sock_id, header, strlen(header));
-  int write_cliRequest = write(sock_id,buff,read_status); 
+  int write_header = write(sock_id, header, strlen(header)); //writing HTTP header in socket
+  int write_cliRequest = write(sock_id,buff,read_status); //writing client request into the socket
 
   if (write_cliRequest == -1){
-    syslog(LOG_ERR,"Writing header in socket: %s",strerror(errno));
+    syslog(LOG_ERR,"Writing header in socket: %s",strerror(errno)); //If error, log it into log file
   }
 
   if (write_header == -1){
@@ -89,6 +89,7 @@ bool process_request(int sock_id)
   }
 
   int close_status = close(sock_id);
+  
   if (close_status == -1){
     syslog(LOG_ERR,"Closing socket: %s",strerror(errno));
   }
