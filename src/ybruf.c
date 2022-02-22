@@ -39,8 +39,7 @@ static bool app_initialize(int argn, char *argv[])
     fclose(pidfile);
   }
 
-  /* Log the initialization message */
-  // -- YOUR CODE HERE --
+  syslog(LOG_INFO,"Started on port %d", PORT);
 
   return true;
 }
@@ -51,8 +50,7 @@ static bool app_initialize(int argn, char *argv[])
  */
 static void app_terminate(int signo)
 {
-  // Log the termination signal
-  // -- YOUR CODE HERE --
+  syslog(LOG_INFO,"Terminated by the signal %d", signo);
 
   switch (signo) {
   case SIGUSR1:			// "Soft" termination
@@ -68,7 +66,33 @@ static void app_terminate(int signo)
 // Request processor
 bool process_request(int sock_id)
 {
-  // -- YOUR CODE HERE --
+  char buff[MAX_RQ_SIZE];
+  char* header = "HTTP/1.1 200 OK\r\n\r\n";
+
+  int read_status = read(sock_id,buff,MAX_RQ_SIZE);
+
+  if (read_status == -1){
+    syslog(LOG_ERR,"Reading buffer: %s",strerror(errno));
+    return false;
+  }
+
+
+  int write_header = write(sock_id, header, strlen(header));
+  int write_cliRequest = write(sock_id,buff,read_status); 
+
+  if (write_cliRequest == -1){
+    syslog(LOG_ERR,"Writing header in socket: %s",strerror(errno));
+  }
+
+  if (write_header == -1){
+    syslog(LOG_ERR,"Writing message in socket: %s",strerror(errno));
+  }
+
+  int close_status = close(sock_id);
+  if (close_status == -1){
+    syslog(LOG_ERR,"Closing socket: %s",strerror(errno));
+  }
+
   return true;  
 }
 
@@ -84,7 +108,7 @@ int main(int argn, char *argv[])
   struct sockaddr_in serv_addr, cli_addr; 
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (-1 == sockfd) {
-    // -- YOUR CODE HERE --
+    syslog(LOG_ERR,"Socket creation: %s",strerror(errno));
     return EXIT_FAILURE;
   }
 
@@ -95,7 +119,7 @@ int main(int argn, char *argv[])
   serv_addr.sin_port = htons(PORT);
   if (   -1 == bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))
       || -1 == listen(sockfd, 5 /* backlog */)) {
-    // -- YOUR CODE HERE --
+    syslog(LOG_ERR,"bind/listen: %s", strerror(errno));
     return EXIT_FAILURE;
   }
 
@@ -108,7 +132,7 @@ int main(int argn, char *argv[])
     unsigned clilen = sizeof(cli_addr);
     int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
     if (-1 == newsockfd) { // Scrap it
-      // -- YOUR CODE HERE --
+      syslog(LOG_ERR,"accept: %s",strerror(errno));
       continue;
     }
 
