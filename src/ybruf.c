@@ -72,7 +72,7 @@ bool process_request(int sock_id)
   int read_status = read(sock_id,buff,MAX_RQ_SIZE);//reading client request
 
   if (read_status == -1){
-    syslog(LOG_ERR,"Reading request %s",strerror(errno));
+    syslog(LOG_ERR,"Reading request: %s",strerror(errno));
     return false;
   }
 
