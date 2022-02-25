@@ -1,6 +1,6 @@
 TARGET = ybruf
 INCLUDE = ../include
-OBJS = ybruf.o
+OBJS = ybruf.o yb_requests.o
 CC = gcc
 # Uncomment the end of the rule for memory debugging
 LIBS = #-lefence
@@ -17,6 +17,8 @@ $(TARGET): $(OBJS)
 	$(CC) $(OBJS) -o $(TARGET) $(LIBS)
 
 ybruf.o: ybruf.c $(INCLUDE)/ybruf.h
+
+yb_requests.o: yb_requests.c $(INCLUDE)/ybruf.h
 
 # Remove everything that can be rebuilt
 clean:

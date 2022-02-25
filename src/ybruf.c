@@ -1,12 +1,10 @@
 #include <netinet/in.h>
-#include <syslog.h>
 #include <signal.h>
 
 #include "ybruf.h"
 
 // Global parameters
 const int MIN_SERVERS = 3, MAX_SERVERS = 10;
-const int MAX_RQ_SIZE = 1048576; // 1MB
 
 // Port for the server
 static int PORT = 8000;
@@ -39,7 +37,8 @@ static bool app_initialize(int argn, char *argv[])
     fclose(pidfile);
   }
 
-  syslog(LOG_INFO,"Started on port %d", PORT);//include info in log file
+  /* Log the initialization message */
+  syslog(LOG_INFO, "Started on port %d", PORT);
 
   return true;
 }
@@ -50,7 +49,8 @@ static bool app_initialize(int argn, char *argv[])
  */
 static void app_terminate(int signo)
 {
-  syslog(LOG_INFO,"Terminated by the signal %d", signo); //include info in log file
+  // Log the termination signal
+  syslog(LOG_INFO, "Terminated by signal %d", signo);
 
   switch (signo) {
   case SIGUSR1:			// "Soft" termination
@@ -61,40 +61,6 @@ static void app_terminate(int signo)
   default:			// Do nothing
     break;
   }
-}
-
-// Request processor
-bool process_request(int sock_id)
-{
-  char buff[MAX_RQ_SIZE];
-  char* header = "HTTP/1.1 200 OK\r\n\r\n"; 
-
-  int read_status = read(sock_id,buff,MAX_RQ_SIZE);//reading client request
-
-  if (read_status == -1){
-    syslog(LOG_ERR,"Reading request: %s",strerror(errno));
-    return false;
-  }
-
-
-  int write_header = write(sock_id, header, strlen(header)); //writing HTTP header in socket
-  int write_cliRequest = write(sock_id,buff,read_status); //writing client request into the socket
-
-  if (write_cliRequest == -1){
-    syslog(LOG_ERR,"Writing header in socket: %s",strerror(errno)); //If error, log it into log file
-  }
-
-  if (write_header == -1){
-    syslog(LOG_ERR,"Writing message in socket: %s",strerror(errno));
-  }
-
-  int close_status = close(sock_id);
-  
-  if (close_status == -1){
-    syslog(LOG_ERR,"Closing socket: %s",strerror(errno));
-  }
-
-  return true;  
 }
 
 // The main function 
@@ -109,7 +75,7 @@ int main(int argn, char *argv[])
   struct sockaddr_in serv_addr, cli_addr; 
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (-1 == sockfd) {
-    syslog(LOG_ERR,"Socket creation: %s",strerror(errno));
+    syslog(LOG_ERR, "socket(): %s", strerror(errno));
     return EXIT_FAILURE;
   }
 
@@ -120,7 +86,7 @@ int main(int argn, char *argv[])
   serv_addr.sin_port = htons(PORT);
   if (   -1 == bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))
       || -1 == listen(sockfd, 5 /* backlog */)) {
-    syslog(LOG_ERR,"bind/listen: %s", strerror(errno));
+    syslog(LOG_ERR, "bind()/listen(): %s", strerror(errno));
     return EXIT_FAILURE;
   }
 
@@ -133,11 +99,13 @@ int main(int argn, char *argv[])
     unsigned clilen = sizeof(cli_addr);
     int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
     if (-1 == newsockfd) { // Scrap it
-      syslog(LOG_ERR,"accept: %s",strerror(errno));
+      syslog(LOG_ERR, "accept(): %s", strerror(errno));
       continue;
     }
 
+    // Fetch and process the request
     process_request(newsockfd);
   }
   return EXIT_SUCCESS;
 }
+

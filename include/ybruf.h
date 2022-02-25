@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <syslog.h>
 
 //#define DEBUG
 
@@ -19,7 +20,10 @@
 #define APP_NAME "ybruf"
 #define APP_PIDFILE APP_NAME ".pid"
 
-extern const int MIN_SERVERS, MAX_SERVERS, MAX_RQ_SIZE;
+extern const int MIN_SERVERS, MAX_SERVERS;
 bool process_request(int sock_id);
+
+#define PROTO "HTTP/1.1 "
+#define DEFAULT_DOC "index.html"
 
 #endif // YBRUF_H
