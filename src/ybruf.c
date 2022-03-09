@@ -1,7 +1,7 @@
 #include <netinet/in.h>
 #include <signal.h>
 
-#include "ybruf.h"
+#include "/home/prousoglou/Desktop/Team-bravo/bravo-project/include/ybruf.h"
 
 // Global parameters
 const int MIN_SERVERS = 3, MAX_SERVERS = 10;

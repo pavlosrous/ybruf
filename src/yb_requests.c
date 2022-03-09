@@ -8,8 +8,16 @@ static const int MAX_DATA_SIZE = 1048576; // 1MB
 
 bool write_http_header(int sock_id, const char *status, const char *msg)
 {
-  // YOUR CODE HERE
-  
+
+  if (msg!=NULL){
+    char message[strlen(status)+strlen(msg)];
+    strcpy(message,status);
+    strcat(message,msg);
+    write(sock_id,message,strlen(message));
+  }
+  // else{
+  //   write(sock_id);
+  // }
   return true;
 }
 
@@ -29,11 +37,26 @@ bool process_GET(int sock_id, char *doc)
 bool process_request(int sock_id)
 {
   const char ACCEPTED_METHOD[] = "GET";
-  // YOUR CODE HERE
+  char buffer[MAX_RQ_SIZE];
+  const char* error_header = "HTTP/1.1 400 Bad Request\r\n\r\n";
 
-  /* Read the request from the socket.
-     In case of error, syslog it, close the socket, and return false */
-  // YOUR CODE HERE
+    int socket_read = read(sock_id,buffer,MAX_RQ_SIZE);
+    if (socket_read < 0){
+      syslog(LOG_ERR,"read():%s",strerror(errno));
+    }
+
+
+    char* method = strtok(buffer," ");
+    if (strcmp(method,"")){
+      write_http_header(sock_id,error_header,NULL);
+      return false;
+    }
+
+    char* file_name = strtok(NULL," ");
+    
+    // if (strcmp(++file_name),""){
+
+    // }
 
   /* Extract the method */
   // YOUR CODE HERE
