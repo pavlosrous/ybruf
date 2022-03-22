@@ -11,10 +11,8 @@
 
 //#define DEBUG
 
-#ifdef DEBUG
-#define APP_WD "../run/"
-#else
-#define APP_WD "/tmp/"
+#ifndef APP_WD
+#define APP_WD "/tmp/public_html/"
 #endif
 
 #define APP_NAME "ybruf"
