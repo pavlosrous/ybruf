@@ -14,18 +14,6 @@ static bool write_http_header(int sock_id,
 			      const char *status,
 			      const char *msg)
 {
-<<<<<<< HEAD
-
-  if (msg!=NULL){
-    char message[strlen(status)+strlen(msg)];
-    strcpy(message,status);
-    strcat(message,msg);
-    write(sock_id,message,strlen(message));
-  }
-  // else{
-  //   write(sock_id);
-  // }
-=======
   static const char *RNRN = "\r\n\r\n";
   if (   strlen(status)       != write(sock_id, status, strlen(status))
       || strlen(RNRN)         != write(sock_id, RNRN, strlen(RNRN))
@@ -33,7 +21,6 @@ static bool write_http_header(int sock_id,
     syslog(LOG_ERR, "write(): %s", strerror(errno));
     return false;
   }
->>>>>>> 05402976c7cb56dd899bc3344e6c54129ce35e6c
   return true;
 }
 
@@ -96,28 +83,6 @@ static bool process_GET(int sock_id, char *doc)
 bool process_request(int sock_id)
 {
   const char ACCEPTED_METHOD[] = "GET";
-<<<<<<< HEAD
-  char buffer[MAX_RQ_SIZE];
-  const char* error_header = "HTTP/1.1 400 Bad Request\r\n\r\n";
-
-    int socket_read = read(sock_id,buffer,MAX_RQ_SIZE);
-    if (socket_read < 0){
-      syslog(LOG_ERR,"read():%s",strerror(errno));
-    }
-
-
-    char* method = strtok(buffer," ");
-    if (strcmp(method,"")){
-      write_http_header(sock_id,error_header,NULL);
-      return false;
-    }
-
-    char* file_name = strtok(NULL," ");
-    
-    // if (strcmp(++file_name),""){
-
-    // }
-=======
   char data[MAX_RQ_SIZE];
 
   /* Read the request from the socket.
@@ -129,7 +94,6 @@ bool process_request(int sock_id)
     return false;
   }
   data[size] = 0;
->>>>>>> 05402976c7cb56dd899bc3344e6c54129ce35e6c
 
   /* Extract the method */
   char *request = strtok(data, " ");
