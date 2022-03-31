@@ -1,15 +1,19 @@
+include ../setup.mk
+
 TARGET = ybruf
+APP_WD = $(DEST)/$(HTML_ROOT)
 INCLUDE = ../include
 OBJS = ybruf.o yb_requests.o
 CC = gcc
 # Uncomment the end of the rule for memory debugging
-LIBS = #-lefence
+LIBS = -pthread #-lefence
 
 CFLAGS = -I$(INCLUDE) -Wall -pedantic -Wextra -Wcast-align -Wcast-qual \
 	-Winit-self \
 	-Wmissing-include-dirs -Wredundant-decls -Wshadow \
 	-Wstrict-overflow=5 -Wundef -Werror -Wno-unused \
-	-g -Wno-unused-result -O3 -Wno-strict-overflow -Wno-sign-compare
+	-g -Wno-unused-result -O3 -Wno-strict-overflow -Wno-sign-compare \
+	-DAPP_WD=\"$(APP_WD)\" -pthread
 
 all: $(TARGET)
 

@@ -1,5 +1,6 @@
 #include <netinet/in.h>
 #include <signal.h>
+#include <pthread.h>
 
 #include "/home/prousoglou/Desktop/Team-bravo/bravo-project/include/ybruf.h"
 
@@ -37,9 +38,6 @@ static bool app_initialize(int argn, char *argv[])
     fclose(pidfile);
   }
 
-  /* Log the initialization message */
-  syslog(LOG_INFO, "Started on port %d", PORT);
-
   return true;
 }
 
@@ -63,6 +61,13 @@ static void app_terminate(int signo)
   }
 }
 
+/* FOR YOUR REFERENCE */
+// A thread worker; it simply starts `process_request`
+static void *worker(void *arg) {
+  bool status = process_request(*(int*)arg);
+  pthread_exit((void*)status);
+}
+
 // The main function 
 int main(int argn, char *argv[])
 {
@@ -75,7 +80,7 @@ int main(int argn, char *argv[])
   struct sockaddr_in serv_addr, cli_addr; 
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (-1 == sockfd) {
-    syslog(LOG_ERR, "socket(): %s", strerror(errno));
+    syslog(LOG_ERR, "socket: %s", strerror(errno));
     return EXIT_FAILURE;
   }
 
@@ -86,7 +91,7 @@ int main(int argn, char *argv[])
   serv_addr.sin_port = htons(PORT);
   if (   -1 == bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))
       || -1 == listen(sockfd, 5 /* backlog */)) {
-    syslog(LOG_ERR, "bind()/listen(): %s", strerror(errno));
+    syslog(LOG_ERR, "bind/listen: %s", strerror(errno));
     return EXIT_FAILURE;
   }
 
@@ -94,18 +99,27 @@ int main(int argn, char *argv[])
   signal(SIGUSR1, app_terminate);
   signal(SIGUSR2, app_terminate);
 
+  /* Log the initialization message */
+  syslog(LOG_INFO, "Started on port %d", PORT);
+
   // The main loop
   while (!done) {
     unsigned clilen = sizeof(cli_addr);
     int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
     if (-1 == newsockfd) { // Scrap it
-      syslog(LOG_ERR, "accept(): %s", strerror(errno));
+      syslog(LOG_ERR, "accept: %s", strerror(errno));
       continue;
     }
 
-    // Fetch and process the request
-    process_request(newsockfd);
+    /* FOR YOUR REFERENCE */
+    // Create a worker to fetch and process the request
+    pthread_t t;
+    if (pthread_create(&t, NULL, worker, (void*)&newsockfd)
+	|| pthread_detach(t)) {
+      syslog(LOG_ERR, "pthread: %s", strerror(errno));
+      continue;
+    }
   }
+
   return EXIT_SUCCESS;
 }
-

@@ -1,4 +1,7 @@
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <limits.h>
 
 #include "ybruf.h"
 
@@ -6,8 +9,12 @@
 static const int MAX_RQ_SIZE = 1048576; // 1MB
 static const int MAX_DATA_SIZE = 1048576; // 1MB
 
-bool write_http_header(int sock_id, const char *status, const char *msg)
+// Request processor
+static bool write_http_header(int sock_id,
+			      const char *status,
+			      const char *msg)
 {
+<<<<<<< HEAD
 
   if (msg!=NULL){
     char message[strlen(status)+strlen(msg)];
@@ -18,25 +25,78 @@ bool write_http_header(int sock_id, const char *status, const char *msg)
   // else{
   //   write(sock_id);
   // }
+=======
+  static const char *RNRN = "\r\n\r\n";
+  if (   strlen(status)       != write(sock_id, status, strlen(status))
+      || strlen(RNRN)         != write(sock_id, RNRN, strlen(RNRN))
+      || (msg && (strlen(msg) != write(sock_id, msg, strlen(msg))))) {
+    syslog(LOG_ERR, "write(): %s", strerror(errno));
+    return false;
+  }
+>>>>>>> 05402976c7cb56dd899bc3344e6c54129ce35e6c
   return true;
 }
 
-bool process_GET(int sock_id, char *doc)
+static bool process_dir(int sock_id, char *doc)
 {
-  char data[MAX_DATA_SIZE];
+  // Open the directory for reading
+  // YOUR CODE GOES HERE
 
-  /* Update the doc name */
-  // YOUR CODE HERE
+  // Write the header - we seem to be ok
+  // Technically, this is not correct. We must first fully read the directory 
+  // YOUR CODE GOES HERE
 
-  /* Copy the file into the socket, if possible */
-  // YOUR CODE HERE
+  // Define the template
+  // YOUR CODE GOES HERE
 
+  errno = 0; // Assume no errors
+  // YOUR CODE GOES HERE
+    
+  if (errno) {
+    // Too late to complain!
+  }
+  
+  return errno == 0;
+}
+
+static bool process_GET(int sock_id, char *doc)
+{
+  // Check if the file exists, and get its information
+  struct stat statbuf;
+  if (-1 == stat(doc, &statbuf)) {
+    write_http_header(sock_id, PROTO "404 File Not Found", 
+		      "File Not Found");
+    return false;
+  }
+
+  // Process directory listing
+  if (statbuf.st_mode & S_IFDIR)
+    return process_dir(sock_id, doc);
+
+  // Process file 
+  int infile = open(doc, O_RDONLY);
+  if (-1 == infile) {
+    write_http_header(sock_id, PROTO "403 Forbidden", "Forbidden");
+    return false;
+  } else {
+    if (!write_http_header(sock_id, PROTO "200 OK", NULL))
+      return false;
+
+    // Copy the file to the socket
+    int size;
+    char data[MAX_DATA_SIZE];
+
+    while (0 < (size = read(infile, data, sizeof(data)))
+	   && (size == write(sock_id, data, size)));
+    close(infile);  
+  }
   return true;
 }
 
 bool process_request(int sock_id)
 {
   const char ACCEPTED_METHOD[] = "GET";
+<<<<<<< HEAD
   char buffer[MAX_RQ_SIZE];
   const char* error_header = "HTTP/1.1 400 Bad Request\r\n\r\n";
 
@@ -57,23 +117,48 @@ bool process_request(int sock_id)
     // if (strcmp(++file_name),""){
 
     // }
+=======
+  char data[MAX_RQ_SIZE];
+
+  /* Read the request from the socket.
+     In case of error, syslog it, close the socket, and return false */
+  int size = read(sock_id, data, sizeof(data));
+  if (size <= 0) {
+    syslog(LOG_ERR, "read(): %s", strerror(errno));
+    close(sock_id);
+    return false;
+  }
+  data[size] = 0;
+>>>>>>> 05402976c7cb56dd899bc3344e6c54129ce35e6c
 
   /* Extract the method */
-  // YOUR CODE HERE
+  char *request = strtok(data, " ");
+  if (!request) {
+    write_http_header(sock_id, PROTO "400 Bad Request", "Bad request");
+    close(sock_id);  
+    return false;
+  }
   
   /* Is it the GET method? */
-  // YOUR CODE HERE
+  if (strcasecmp(request, ACCEPTED_METHOD)) {
+    write_http_header(sock_id, PROTO "405 Method Not Allowed",
+		      "Method Not Allowed");
+    close(sock_id);  
+    return false;
+  }
 
   /* Extract the document */
-  // YOUR CODE HERE
+  char *doc = strtok(NULL, " ");
+  if (!doc) {
+    write_http_header(sock_id, PROTO "400 Bad Request", "Bad Request");
+    close(sock_id);  
+    return false;
+  }
 
   /* Process the GET method */
-   // YOUR CODE HERE
-
-  // JUST FOR TESTING; PLEASE REMOVE
-  const char *header = "HTTP/1.1 300 Multiple Choices\r\n\r\nI am a Ybruf, yo!";
-  write(sock_id, header, strlen(header));
+  doc[-1] = '.';
+  process_GET(sock_id, doc - 1);
+  close(sock_id);
   
-  close(sock_id);  
   return true;  
 }
