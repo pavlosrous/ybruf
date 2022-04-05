@@ -2,7 +2,7 @@
 #include <signal.h>
 #include <pthread.h>
 
-#include "/home/prousoglou/Desktop/Team-bravo/bravo-project/include/ybruf.h"
+#include "ybruf.h"
 
 // Global parameters
 const int MIN_SERVERS = 3, MAX_SERVERS = 10;

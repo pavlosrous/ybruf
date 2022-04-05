@@ -3,7 +3,7 @@
 #include <dirent.h>
 #include <limits.h>
 
-#include "/home/prousoglou/Desktop/Team-bravo/bravo-project/include/ybruf.h"
+#include "ybruf.h"
 
 // Memory configuration parameters
 static const int MAX_RQ_SIZE = 1048576; // 1MB
