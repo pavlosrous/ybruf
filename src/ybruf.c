@@ -114,8 +114,8 @@ int main(int argn, char *argv[])
     /* FOR YOUR REFERENCE */
     // Create a worker to fetch and process the request
     pthread_t t;
-    if (!pthread_create(&t, NULL, worker, (void*)&newsockfd)
-	|| !pthread_detach(t)) {
+    if (pthread_create(&t, NULL, worker, (void*)&newsockfd)
+	|| pthread_detach(t)) {
       syslog(LOG_ERR, "pthread: %s", strerror(errno));
       continue;
     }
