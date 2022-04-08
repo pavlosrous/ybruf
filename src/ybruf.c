@@ -65,6 +65,7 @@ static void app_terminate(int signo)
 // A thread worker; it simply starts `process_request`
 static void *worker(void *arg) {
   bool status = process_request(*(int*)arg);
+  free(arg);
   pthread_exit((void*)status);
 }
 
@@ -114,12 +115,13 @@ int main(int argn, char *argv[])
     /* FOR YOUR REFERENCE */
     // Create a worker to fetch and process the request
     pthread_t t;
-    if (pthread_create(&t, NULL, worker, (void*)&newsockfd)
+    int *newsockfd_ptr = malloc(sizeof(int));
+    *newsockfd_ptr = newsockfd;
+    if (pthread_create(&t, NULL, worker, (void*)newsockfd_ptr)
 	|| pthread_detach(t)) {
       syslog(LOG_ERR, "pthread: %s", strerror(errno));
       continue;
     }
-  // process_request(newsockfd);
   }
 
   return EXIT_SUCCESS;
