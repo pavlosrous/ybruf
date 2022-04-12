@@ -3,7 +3,7 @@ include ../setup.mk
 TARGET = ybruf
 APP_WD = $(DEST)/$(HTML_ROOT)
 INCLUDE = ../include
-OBJS = ybruf.o yb_requests.o
+OBJS = ybruf.o yb_requests.o yb_cache.o
 CC = gcc
 # Uncomment the end of the rule for memory debugging
 LIBS = -pthread #-lefence
@@ -23,6 +23,8 @@ $(TARGET): $(OBJS)
 ybruf.o: ybruf.c $(INCLUDE)/ybruf.h
 
 yb_requests.o: yb_requests.c $(INCLUDE)/ybruf.h
+
+yb_cache.o: yb_cache.c $(INCLUDE)/ybruf.h
 
 # Remove everything that can be rebuilt
 clean:

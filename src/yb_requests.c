@@ -24,104 +24,108 @@ static bool write_http_header(int sock_id,
   return true;
 }
 
-static bool process_dir(int sock_id, char *doc)
+static char *process_dir(char *doc)
 {
+  // Open the directory for reading
+  DIR *cwd = opendir(doc);
+  if (!cwd)
+    return NULL;
+  
+  struct dirent *entry;
 
-  struct dirent *d_info; //info about directory entry
-
-  // // Open the directory for reading
-  // YOUR CODE GOES HERE
-  DIR *dir = opendir(doc); 
-
-
-  //error checking for opening dir
-  if (dir == NULL){
-    syslog(LOG_ERR, "opendir(): %s", strerror(errno));
+  /*
+    THIS CODE IS A SOLUTION TO THE PREV STAGE
+    REMOVE IT AFTER REVIEWING
+  // Write the header - we seem to be ok
+  // Technically, this is not correct. We must first fully read the directory 
+  if (!write_http_header(sock_id, PROTO "200 OK", NULL))
     return false;
-  }
-  
+
   // Define the template
-  char *ul_open = "<ul>\n";
-  char *ul_close = "</ul>";
-  char *li_open = "<li><a href=\"";
-  char *a_close = "\">";
-  char *li_close = "</a></li>\n";
-  char *html_start = "<html>\n<body>";
-  char *html_end = "</body>\n</html>";
-  char entry_name[1024];
-  
-  
-
-  write_http_header(sock_id, PROTO "200 OK", NULL);
-
-  write(sock_id, html_start, strlen(html_start));
-  write(sock_id, ul_open, strlen(ul_open));
+  static const char *PRE_FMT = "<html><h1>Directory Index</h1>\n<ul>";
+  static const char *LINE_FMT = "<li><a href=\"%s%s\">%s</a>\n";
+  static const char *POST_FMT = "</ul></html>";
+  char row[strlen(LINE_FMT) + 2 * NAME_MAX + 1];
 
   errno = 0; // Assume no errors
-
-  while ((d_info = readdir(dir)) != NULL){ //find files in dir
-
-    strcpy(entry_name, d_info->d_name); //add the name of the file
-
-    if (d_info->d_type==DT_DIR){ //with dont want current directory
-      strcat(entry_name, "/");
+  
+  write(sock_id, PRE_FMT, strlen(PRE_FMT));
+  while((entry = readdir(cwd))) {
+    if (strcmp(entry->d_name, ".")) { // No self references
+      sprintf(row, LINE_FMT,
+	      entry->d_name,
+	      entry->d_type == DT_DIR ? "/" : "",
+	      entry->d_name);
+      write(sock_id, row, strlen(row));
     }
-
-    if (strcmp(d_info->d_name,".")!=0){
-
-      write(sock_id, li_open, strlen(li_open));
-      write(sock_id, entry_name, strlen(entry_name)); //write list tags in socket
-      write(sock_id, a_close, strlen(a_close));
-      write(sock_id, d_info->d_name, strlen(d_info->d_name));
-      write(sock_id, li_close, strlen(li_close));
-    }
-    
   }
-  write(sock_id, ul_close, strlen(ul_close)); //write the closing hmtl tags
-  write(sock_id, html_end, strlen(html_end));
-  closedir(dir);
+  write(sock_id, POST_FMT, strlen(POST_FMT));
+  */
   
+  // FIX THIS WITH YOUR CODE
+  char *data = malloc(10000);
+  sprintf(data, "<html><body>Dir %s</body></html>", doc);
   
-  if (errno) {
-    syslog(LOG_ERR, "%s",strerror(errno));
-  }
-  
-  return errno == 0;
+  closedir(cwd);
+  return data;
 }
 
+static char *process_file(char *doc)
+{
+  int infile = open(doc, O_RDONLY);
+  if (-1 == infile)
+    return NULL;
+
+  // FIX THIS WITH YOUR CODE
+  char *data = malloc(10000);
+  sprintf(data, "<html><body>File %s</body></html>", doc);
+  
+  close(infile);  
+  
+  return data;
+}
 
 static bool process_GET(int sock_id, char *doc)
 {
-  // Check if the file exists, and get its information
-  struct stat statbuf;
-  if (-1 == stat(doc, &statbuf)) {
-    write_http_header(sock_id, PROTO "404 File Not Found", 
-		      "File Not Found");
-    return false;
-  }
+  char *data = cache_lookup(doc);
 
-  // Process directory listing
-  if (statbuf.st_mode & S_IFDIR)
-    return process_dir(sock_id, doc);
-
-  // Process file 
-  int infile = open(doc, O_RDONLY);
-  if (-1 == infile) {
-    write_http_header(sock_id, PROTO "403 Forbidden", "Forbidden");
-    return false;
-  } else {
-    if (!write_http_header(sock_id, PROTO "200 OK", NULL))
+  if (!data) { // We haven't seen this doc before
+    // Check if the doc exists, and get its information
+    struct stat statbuf;
+    if (-1 == stat(doc, &statbuf)) {
+      write_http_header(sock_id, PROTO "404 File Not Found", 
+			"File Not Found");
       return false;
+    }
+    
+    if (statbuf.st_mode & S_IFDIR)      
+      data = process_dir(doc); // Process directory listing  
+    else if (statbuf.st_mode & S_IFREG)    
+      data = process_file(doc); // Process regular file
+    // else ignore
 
-    // Copy the file to the socket
-    int size;
-    char data[MAX_DATA_SIZE];
+    if (!data) {
+      write_http_header(sock_id, PROTO "404 File Not Found", 
+			"File Not Found");
+      return false;
+    }
 
-    while (0 < (size = read(infile, data, sizeof(data)))
-	   && (size == write(sock_id, data, size)));
-    close(infile);  
+    // Cache the content
+    // If this line fails, it's ok!
+    cache_insert(doc, data); 
   }
-  return true;
+  
+  // Write the header
+  if (!write_http_header(sock_id, PROTO "200 OK", NULL))
+    return false;
+  
+  // Write the data
+  if (strlen(data) != write(sock_id, data, strlen(data))) {
+    // YOUR SYSLOG ERROR MESSAGE HERE
+    return false;
+  }
+  
+  return true;	
 }
 
 bool process_request(int sock_id)

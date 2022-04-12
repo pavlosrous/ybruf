@@ -38,6 +38,9 @@ static bool app_initialize(int argn, char *argv[])
     fclose(pidfile);
   }
 
+  /* Initialize the cache */
+  init_cache();
+  
   return true;
 }
 
@@ -61,7 +64,6 @@ static void app_terminate(int signo)
   }
 }
 
-/* FOR YOUR REFERENCE */
 // A thread worker; it simply starts `process_request`
 static void *worker(void *arg) {
   bool status = process_request(*(int*)arg);
@@ -103,6 +105,12 @@ int main(int argn, char *argv[])
   /* Log the initialization message */
   syslog(LOG_INFO, "Started on port %d", PORT);
 
+  /* Prepare thread attributes */
+  pthread_t t;
+  pthread_attr_t attr;
+  pthread_attr_init(&attr); // Always succeeds
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
   // The main loop
   while (!done) {
     unsigned clilen = sizeof(cli_addr);
@@ -112,17 +120,17 @@ int main(int argn, char *argv[])
       continue;
     }
 
-    /* FOR YOUR REFERENCE */
     // Create a worker to fetch and process the request
-    pthread_t t;
+    
     int *newsockfd_ptr = malloc(sizeof(int));
     *newsockfd_ptr = newsockfd;
-    if (pthread_create(&t, NULL, worker, (void*)newsockfd_ptr)
-	|| pthread_detach(t)) {
+    if (pthread_create(&t, &attr, worker, (void*)newsockfd_ptr)) {
       syslog(LOG_ERR, "pthread: %s", strerror(errno));
       continue;
     }
   }
+
+  pthread_attr_destroy(&attr);
 
   return EXIT_SUCCESS;
 }
