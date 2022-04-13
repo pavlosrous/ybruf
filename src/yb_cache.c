@@ -7,12 +7,13 @@
 #define CACHE_SIZE 1024
 #define DISCARD_AFTER_MS 10000 /* 10 sec */
 
+static pthread_mutex_t cache_in_use = PTHREAD_MUTEX_INITIALIZER;
+
 typedef struct {
-  bool used;
-  pthread_mutex_t mutex;
-  char *key;
-  char *value;
-  struct timeval created;
+  struct timeval created;	/* The time of caching */
+  struct timeval accessed;	/* The time of the most recent access */
+  char *key;			/* NULL if not used */
+  char *value;			/* NULL if not used */
 } CacheLine;
 
 static CacheLine cache[CACHE_SIZE];
@@ -29,7 +30,7 @@ char *cache_lookup(const char *key)
   return NULL;
 }
 
-// Do not forget to lock and later unlock the mutex(es)!
+// Do not forget to lock and later unlock the mutex!
 bool cache_insert(const char *key, const char *value)
 {
   // YOUR CODE HERE
