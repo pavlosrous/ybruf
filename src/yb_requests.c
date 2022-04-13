@@ -88,6 +88,7 @@ static char *process_file(char *doc)
 static bool process_GET(int sock_id, char *doc)
 {
   char *data = cache_lookup(doc);
+  bool found = false;
 
   if (!data) { // We haven't seen this doc before
     // Check if the doc exists, and get its information
@@ -113,18 +114,26 @@ static bool process_GET(int sock_id, char *doc)
     // Cache the content
     // If this line fails, it's ok!
     cache_insert(doc, data); 
-  }
+  } else
+    found = true;
   
   // Write the header
-  if (!write_http_header(sock_id, PROTO "200 OK", NULL))
+  if (!write_http_header(sock_id, PROTO "200 OK", NULL)) {
+    if (found) /* Avoid memory leaks */
+      free(data);
     return false;
+  }
   
   // Write the data
   if (strlen(data) != write(sock_id, data, strlen(data))) {
     // YOUR SYSLOG ERROR MESSAGE HERE
+    if (found) /* avoid memory leaks */
+      free(data);
     return false;
   }
-  
+
+  if (found) /* Avoid memory leaks */
+    free(data);
   return true;	
 }
 
