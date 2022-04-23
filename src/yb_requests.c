@@ -56,7 +56,7 @@ static char *process_dir(char *doc, int *len)
   }
   
   if (errno!=0){
-    syslog(LOG_ERR, "readdir(): %s", strerror(errno));
+    syslog(LOG_ERR, "readdir(): %s", strerror(errno)); //if errno not 0 error occured while reading dir
     closedir(cwd);
     return NULL;
   }
@@ -68,6 +68,7 @@ static char *process_dir(char *doc, int *len)
   strcpy(dirbuff, PRE_FMT); // need to copy not strcat because there's nothing in there yet
   rewinddir(cwd);           // start again from begining
 
+  errno = 0; 
   while ((entry = readdir(cwd)))
   {
     if (strcmp(entry->d_name, "."))
@@ -81,7 +82,7 @@ static char *process_dir(char *doc, int *len)
   }
 
   if (errno!=0){
-    syslog(LOG_ERR, "readdir(): %s", strerror(errno));
+    syslog(LOG_ERR, "readdir(): %s", strerror(errno)); //if errno not 0 error occured while reading dir
     closedir(cwd);
     return NULL;
   }
@@ -92,7 +93,7 @@ static char *process_dir(char *doc, int *len)
   char *data = strdup(dirbuff);
 
   if (data==NULL){
-    syslog(LOG_ERR, "strdup(): %s", strerror(errno));
+    syslog(LOG_ERR, "strdup(): %s", strerror(errno)); //enough memory to dup?
     closedir(cwd);
     return NULL;
   }
@@ -128,7 +129,7 @@ static char *process_file(char *doc, int *len)
     close(infile); 
   }
   else{
-    syslog(LOG_ERR, "malloc(): %s", strerror(errno));
+    syslog(LOG_ERR, "malloc(): %s", strerror(errno)); //enough memory to malloc?
     close(infile);
     return NULL;
   }
