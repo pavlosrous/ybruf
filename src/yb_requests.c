@@ -6,121 +6,169 @@
 #include "ybruf.h"
 
 // Memory configuration parameters
-static const int MAX_RQ_SIZE = 1048576; // 1MB
+// static const int MAX_RQ_SIZE = 1048576;   // 1MB
 static const int MAX_DATA_SIZE = 1048576; // 1MB
 
 // Request processor
 static bool write_http_header(int sock_id,
-			      const char *status,
-			      const char *msg)
+                              const char *status,
+                              const char *msg)
 {
   static const char *RNRN = "\r\n\r\n";
-  if (   strlen(status)       != write(sock_id, status, strlen(status))
-      || strlen(RNRN)         != write(sock_id, RNRN, strlen(RNRN))
-      || (msg && (strlen(msg) != write(sock_id, msg, strlen(msg))))) {
+  if (strlen(status) != write(sock_id, status, strlen(status)) || strlen(RNRN) != write(sock_id, RNRN, strlen(RNRN)) || (msg && (strlen(msg) != write(sock_id, msg, strlen(msg)))))
+  {
     syslog(LOG_ERR, "write(): %s", strerror(errno));
     return false;
   }
   return true;
 }
 
-static bool process_dir(int sock_id, char *doc)
+static char *process_dir(char *doc, int *len)
 {
+  // Open the directory for reading
+  DIR *cwd = opendir(doc);
+  if (!cwd)
+    return NULL;
 
-  struct dirent *d_info; //info about directory entry
+  struct dirent *entry;
 
-  // // Open the directory for reading
-  // YOUR CODE GOES HERE
-  DIR *dir = opendir(doc); 
-
-
-  //error checking for opening dir
-  if (dir == NULL){
-    syslog(LOG_ERR, "opendir(): %s", strerror(errno));
-    return false;
-  }
-  
   // Define the template
-  char *ul_open = "<ul>\n";
-  char *ul_close = "</ul>";
-  char *li_open = "<li><a href=\"";
-  char *a_close = "\">";
-  char *li_close = "</a></li>\n";
-  char *html_start = "<html>\n<body>";
-  char *html_end = "</body>\n</html>";
-  char entry_name[1024];
-  
-  
+  int dirSize = 0;
+  static const char *PRE_FMT = "<html><h1>Directory Index</h1>\n<ul>";
+  static const char *LINE_FMT = "<li><a href=\"%s%s\">%s</a>\n";
+  static const char *POST_FMT = "</ul></html>";
 
-  write_http_header(sock_id, PROTO "200 OK", NULL);
+  char row[strlen(LINE_FMT) + 2 * NAME_MAX + 1];
+  dirSize += strlen(PRE_FMT) + strlen(POST_FMT); //+ (strlen(LINE_FMT) + NAME_MAX * 2 + 1) * 256; we need to use this if we don't read twice
+  errno = 0;                                     // Assume no errors
 
-  write(sock_id, html_start, strlen(html_start));
-  write(sock_id, ul_open, strlen(ul_open));
-
-  errno = 0; // Assume no errors
-
-  while ((d_info = readdir(dir)) != NULL){ //find files in dir
-
-    strcpy(entry_name, d_info->d_name); //add the name of the file
-
-    if (d_info->d_type==DT_DIR){ //with dont want current directory
-      strcat(entry_name, "/");
+  // get the size of the string
+  while ((entry = readdir(cwd)))
+  {
+    if (strcmp(entry->d_name, "."))
+    { // No self references
+      sprintf(row, LINE_FMT,
+              entry->d_name,
+              entry->d_type == DT_DIR ? "/" : "",
+              entry->d_name);
+      dirSize += strlen(row);
     }
+  }
+  *len = dirSize;
 
-    if (strcmp(d_info->d_name,".")!=0){
+  char dirbuff[dirSize];
 
-      write(sock_id, li_open, strlen(li_open));
-      write(sock_id, entry_name, strlen(entry_name)); //write list tags in socket
-      write(sock_id, a_close, strlen(a_close));
-      write(sock_id, d_info->d_name, strlen(d_info->d_name));
-      write(sock_id, li_close, strlen(li_close));
+  // construct the string with static buffer
+  strcpy(dirbuff, PRE_FMT); // need to copy not strcat because there's nothing in there yet
+  rewinddir(cwd);           // start again from begining
+
+  while ((entry = readdir(cwd)))
+  {
+    if (strcmp(entry->d_name, "."))
+    {
+      sprintf(row, LINE_FMT,
+              entry->d_name,
+              entry->d_type == DT_DIR ? "/" : "",
+              entry->d_name);
+      strcat(dirbuff, row);
     }
-    
   }
-  write(sock_id, ul_close, strlen(ul_close)); //write the closing hmtl tags
-  write(sock_id, html_end, strlen(html_end));
-  closedir(dir);
-  
-  
-  if (errno) {
-    syslog(LOG_ERR, "%s",strerror(errno));
-  }
-  
-  return errno == 0;
+  strcat(dirbuff, POST_FMT);
+
+  // dup returns pointer to dirbuff
+  char *data = strdup(dirbuff);
+
+  closedir(cwd);
+  return data;
 }
 
+static char *process_file(char *doc, int *len)
+{
+  int infile = open(doc, O_RDONLY);
+  if (-1 == infile)
+    return NULL;
+  // find file info
+  struct stat statbuf;
+  stat(doc, &statbuf);
+  *len = statbuf.st_size;
+
+  // allocate appropriate space for file content
+  char *data = malloc(statbuf.st_size);
+
+  int size;
+  if (data)
+  {
+    while (0 < (size = read(infile, data, statbuf.st_size)))
+      ; // read it
+    close(infile);
+  }
+  else
+  {
+    syslog(LOG_ERR, "malloc(): %s", strerror(errno));
+    close(infile);
+  }
+
+  return data;
+}
 
 static bool process_GET(int sock_id, char *doc)
 {
-  // Check if the file exists, and get its information
-  struct stat statbuf;
-  if (-1 == stat(doc, &statbuf)) {
-    write_http_header(sock_id, PROTO "404 File Not Found", 
-		      "File Not Found");
-    return false;
-  }
+  int len;
+  char *data = cache_lookup(doc, &len);
+  bool found = false;
 
-  // Process directory listing
-  if (statbuf.st_mode & S_IFDIR)
-    return process_dir(sock_id, doc);
-
-  // Process file 
-  int infile = open(doc, O_RDONLY);
-  if (-1 == infile) {
-    write_http_header(sock_id, PROTO "403 Forbidden", "Forbidden");
-    return false;
-  } else {
-    if (!write_http_header(sock_id, PROTO "200 OK", NULL))
+  if (!data)
+  { // We haven't seen this doc before
+    // Check if the doc exists, and get its information
+    struct stat statbuf;
+    if (-1 == stat(doc, &statbuf))
+    {
+      write_http_header(sock_id, PROTO "404 File Not Found",
+                        "File Not Found");
       return false;
+    }
 
-    // Copy the file to the socket
-    int size;
-    char data[MAX_DATA_SIZE];
+    if (statbuf.st_mode & S_IFDIR)
+      data = process_dir(doc, &len); // Process directory listing
+    else if (statbuf.st_mode & S_IFREG)
+      data = process_file(doc, &len); // Process regular file
+    // else ignore
 
-    while (0 < (size = read(infile, data, sizeof(data)))
-	   && (size == write(sock_id, data, size)));
-    close(infile);  
+    if (!data)
+    {
+      write_http_header(sock_id, PROTO "404 File Not Found",
+                        "File Not Found");
+      return false;
+    }
+
+    // Cache the content
+    // If this line fails, it's ok!
+    cache_insert(doc, data, len);
   }
+  else
+    found = true;
+
+  // puts("hi");
+  // printf("doc: %s\ndata: %s\n", doc, data);
+  // Write the header
+  if (!write_http_header(sock_id, PROTO "200 OK", NULL))
+  {
+    if (found) /* Avoid memory leaks */
+      free(data);
+    return false;
+  }
+
+  // Write the data
+  if (len != write(sock_id, data, len))
+  {
+    syslog(LOG_ERR, "write(): %s", strerror(errno));
+    if (found) /* avoid memory leaks */
+      free(data);
+    return false;
+  }
+
+  if (found) /* Avoid memory leaks */
+    free(data);
   return true;
 }
 
@@ -132,7 +180,8 @@ bool process_request(int sock_id)
   /* Read the request from the socket.
      In case of error, syslog it, close the socket, and return false */
   int size = read(sock_id, data, sizeof(data));
-  if (size <= 0) {
+  if (size <= 0)
+  {
     syslog(LOG_ERR, "read(): %s", strerror(errno));
     close(sock_id);
     return false;
@@ -141,25 +190,28 @@ bool process_request(int sock_id)
 
   /* Extract the method */
   char *request = strtok(data, " ");
-  if (!request) {
+  if (!request)
+  {
     write_http_header(sock_id, PROTO "400 Bad Request", "Bad request");
-    close(sock_id);  
+    close(sock_id);
     return false;
   }
-  
+
   /* Is it the GET method? */
-  if (strcasecmp(request, ACCEPTED_METHOD)) {
+  if (strcasecmp(request, ACCEPTED_METHOD))
+  {
     write_http_header(sock_id, PROTO "405 Method Not Allowed",
-		      "Method Not Allowed");
-    close(sock_id);  
+                      "Method Not Allowed");
+    close(sock_id);
     return false;
   }
 
   /* Extract the document */
   char *doc = strtok(NULL, " ");
-  if (!doc) {
+  if (!doc)
+  {
     write_http_header(sock_id, PROTO "400 Bad Request", "Bad Request");
-    close(sock_id);  
+    close(sock_id);
     return false;
   }
 
@@ -167,6 +219,6 @@ bool process_request(int sock_id)
   doc[-1] = '.';
   process_GET(sock_id, doc - 1);
   close(sock_id);
-  
-  return true;  
+
+  return true;
 }

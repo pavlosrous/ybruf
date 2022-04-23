@@ -17,32 +17,40 @@ static bool app_initialize(int argn, char *argv[])
 {
   /* Check usage */
   // More than one arg OR one arg AND not a positive number?
-  if ((argn > 2) || ((argn == 2) && ((PORT = atoi(argv[1])) <= 0))) {
+  if ((argn > 2) || ((argn == 2) && ((PORT = atoi(argv[1])) <= 0)))
+  {
     fprintf(stderr, "USAGE: %s [port-number]\n", argv[0]);
     return false;
   }
 
   /* Change working directory */
-  if (-1 == chdir(APP_WD)) {
+  if (-1 == chdir(APP_WD))
+  {
     perror(APP_WD);
     return false;
   }
-  
+
   /* Save the process ID */
   FILE *pidfile;
-  if (!(pidfile = fopen(APP_PIDFILE, "w"))) {
+  if (!(pidfile = fopen(APP_PIDFILE, "w")))
+  {
     perror(APP_PIDFILE);
     return false;
-  } else {
+  }
+  else
+  {
     fprintf(pidfile, "%d", getpid());
     fclose(pidfile);
   }
 
+  /* Initialize the cache */
+  init_cache();
+
   return true;
 }
 
-/* 
- * Terminate the main loop 
+/*
+ * Terminate the main loop
  * kill -USR1 `cat /tmp/app/app.pid`
  */
 static void app_terminate(int signo)
@@ -50,25 +58,27 @@ static void app_terminate(int signo)
   // Log the termination signal
   syslog(LOG_INFO, "Terminated by signal %d", signo);
 
-  switch (signo) {
-  case SIGUSR1:			// "Soft" termination
+  switch (signo)
+  {
+  case SIGUSR1: // "Soft" termination
     done = true;
     break;
-  case SIGUSR2:			// "Hard" termination
+  case SIGUSR2: // "Hard" termination
     exit(EXIT_SUCCESS);
-  default:			// Do nothing
+  default: // Do nothing
     break;
   }
 }
 
-/* FOR YOUR REFERENCE */
 // A thread worker; it simply starts `process_request`
-static void *worker(void *arg) {
-  bool status = process_request(*(int*)arg);
-  pthread_exit((void*)status);
+static void *worker(void *arg)
+{
+  bool status = process_request(*(int *)arg);
+  free(arg);
+  pthread_exit((void *)status);
 }
 
-// The main function 
+// The main function
 int main(int argn, char *argv[])
 {
   // Inilialize the process
@@ -77,20 +87,21 @@ int main(int argn, char *argv[])
     return EXIT_FAILURE;
 
   // Create a socket
-  struct sockaddr_in serv_addr, cli_addr; 
+  struct sockaddr_in serv_addr, cli_addr;
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (-1 == sockfd) {
+  if (-1 == sockfd)
+  {
     syslog(LOG_ERR, "socket: %s", strerror(errno));
     return EXIT_FAILURE;
   }
 
   // Bind the socket and start listening on it
-  bzero((char *) &serv_addr, sizeof(serv_addr));
+  bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = INADDR_ANY;
   serv_addr.sin_port = htons(PORT);
-  if (   -1 == bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))
-      || -1 == listen(sockfd, 5 /* backlog */)) {
+  if (-1 == bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) || -1 == listen(sockfd, 5 /* backlog */))
+  {
     syslog(LOG_ERR, "bind/listen: %s", strerror(errno));
     return EXIT_FAILURE;
   }
@@ -102,25 +113,41 @@ int main(int argn, char *argv[])
   /* Log the initialization message */
   syslog(LOG_INFO, "Started on port %d", PORT);
 
+  /* Prepare thread attributes */
+  pthread_t t;
+  pthread_attr_t attr;
+  pthread_attr_init(&attr); // Always succeeds
+  // round up and add 2 pages
+  // MacOs and Linux have different stack size for the thread, that's why we need this
+  // no more bus error
+  pthread_attr_setstacksize(&attr, (MAX_RQ_SIZE / getpagesize() + 2) * getpagesize());
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
   // The main loop
-  while (!done) {
+  while (!done)
+  {
     unsigned clilen = sizeof(cli_addr);
     int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-    if (-1 == newsockfd) { // Scrap it
+    if (-1 == newsockfd)
+    { // Scrap it
       syslog(LOG_ERR, "accept: %s", strerror(errno));
       continue;
     }
 
-    /* FOR YOUR REFERENCE */
     // Create a worker to fetch and process the request
-    pthread_t t;
-    if (pthread_create(&t, NULL, worker, (void*)&newsockfd)
-	|| pthread_detach(t)) {
+    // process_request(newsockfd);
+
+    int *newsockfd_ptr = malloc(sizeof(int));
+    *newsockfd_ptr = newsockfd;
+    if (pthread_create(&t, &attr, worker, (void *)newsockfd_ptr))
+    // if (pthread_create(&t, NULL, worker, (void *)newsockfd_ptr))
+    {
       syslog(LOG_ERR, "pthread: %s", strerror(errno));
       continue;
     }
-  // process_request(newsockfd);
   }
+
+  // pthread_attr_destroy(&attr); //do not need this line
 
   return EXIT_SUCCESS;
 }
