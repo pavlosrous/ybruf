@@ -39,9 +39,9 @@ static char *process_dir(char *doc, int *len)
   static const char *POST_FMT = "</ul></html>";
 
   char row[strlen(LINE_FMT) + 2 * NAME_MAX + 1];
-  dirSize += strlen(PRE_FMT) + strlen(POST_FMT); //+ (strlen(LINE_FMT) + NAME_MAX * 2 + 1) * 256; we need to use this if we don't read twice
-  errno = 0;                                     // Assume no errors
+  dirSize += strlen(PRE_FMT) + strlen(POST_FMT); 
 
+  errno = 0;                                     // Assume no errors
   // get the size of the string
   while ((entry = readdir(cwd)))
   {
@@ -53,6 +53,12 @@ static char *process_dir(char *doc, int *len)
               entry->d_name);
       dirSize += strlen(row);
     }
+  }
+  
+  if (errno!=0){
+    syslog(LOG_ERR, "readdir(): %s", strerror(errno));
+    closedir(cwd);
+    return NULL;
   }
   *len = dirSize;
 
@@ -73,10 +79,23 @@ static char *process_dir(char *doc, int *len)
       strcat(dirbuff, row);
     }
   }
+
+  if (errno!=0){
+    syslog(LOG_ERR, "readdir(): %s", strerror(errno));
+    closedir(cwd);
+    return NULL;
+  }
+  
   strcat(dirbuff, POST_FMT);
 
   // dup returns pointer to dirbuff
   char *data = strdup(dirbuff);
+
+  if (data==NULL){
+    syslog(LOG_ERR, "strdup(): %s", strerror(errno));
+    closedir(cwd);
+    return NULL;
+  }
 
   closedir(cwd);
   return data;
@@ -89,23 +108,29 @@ static char *process_file(char *doc, int *len)
     return NULL;
   // find file info
   struct stat statbuf;
-  stat(doc, &statbuf);
+  if (-1 == stat(doc, &statbuf)){
+    syslog(LOG_ERR, "stat: %s", strerror(errno));
+    return NULL;
+  }
   *len = statbuf.st_size;
 
   // allocate appropriate space for file content
   char *data = malloc(statbuf.st_size);
 
   int size;
-  if (data)
-  {
-    while (0 < (size = read(infile, data, statbuf.st_size)))
-      ; // read it
-    close(infile);
+  if (data!=NULL){
+    while (0 < (size = read(infile, data, *len))); //read it
+    if (size==-1){
+      syslog(LOG_ERR, "read(): %s", strerror(errno));
+      close(infile);
+      return NULL;
+    }
+    close(infile); 
   }
-  else
-  {
+  else{
     syslog(LOG_ERR, "malloc(): %s", strerror(errno));
     close(infile);
+    return NULL;
   }
 
   return data;
