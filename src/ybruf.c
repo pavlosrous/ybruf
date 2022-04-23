@@ -45,7 +45,6 @@ static bool app_initialize(int argn, char *argv[])
 
   /* Initialize the cache */
   init_cache();
-
   return true;
 }
 

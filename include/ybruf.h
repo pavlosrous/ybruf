@@ -20,6 +20,9 @@
 
 extern const int MIN_SERVERS, MAX_SERVERS;
 bool process_request(int sock_id);
+void init_cache();
+char *cache_lookup(const char *key);
+bool cache_insert(const char *key, const char *value);
 
 #define PROTO "HTTP/1.1 "
 #define DEFAULT_DOC "index.html"
