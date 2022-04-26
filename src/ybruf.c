@@ -28,18 +28,18 @@ static bool app_initialize(int argn, char *argv[])
   // Daemonize. YOUR CODE HERE
   // Consult https://stackoverflow.com/questions/3095566/linux-daemonize
   
-  // (1) fork, let the parent exit
+  // (1) fork, let the parent _exit successfully
   // (2) setsid
-  // (3) fork, let the parent exit
+  // (3) fork, let the parent _exit successfully
 
-  /* Change working directory */
+  /* (4) Change working directory */
   if (-1 == chdir(APP_WD)) {
     perror(APP_WD);
     return false;
   }
 
-  // (4) umask(0)
-  // (5) dup2 of 0,1,2 to /dev/null
+  // (5) umask(0)
+  // (6) dup2 of 0,1,2 to /dev/null
   
   /* Save the process ID */
   FILE *pidfile;
@@ -50,6 +50,8 @@ static bool app_initialize(int argn, char *argv[])
     fprintf(pidfile, "%d", getpid());
     fclose(pidfile);
   }
+
+  // (6) dup2 of 0,1,2 to /dev/null
 
   /* Initialize the cache */
   init_cache();
