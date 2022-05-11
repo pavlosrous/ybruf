@@ -1,6 +1,8 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <pthread.h>
+#include <fcntl.h> 
+#include <sys/stat.h>
 
 #include "ybruf.h"
 
@@ -29,8 +31,33 @@ static bool app_initialize(int argn, char *argv[])
   // Consult https://stackoverflow.com/questions/3095566/linux-daemonize
   
   // (1) fork, let the parent _exit successfully
+  pid_t pid = fork();
+
+  if (pid < 0){
+    perror("fork()"); //perror, stdout still open
+    return false; //return false and not exit(failure) since we will still be in parent and
+  }
+  //if pid > 0, we are in the parent so terminate successfully
+  if (pid > 0){
+    _exit(EXIT_SUCCESS);
+  }
   // (2) setsid
-  // (3) fork, let the parent _exit successfully
+  if (setsid() < 0){
+    perror("setsid()");
+    return false; 
+  }
+
+  // (3) fork
+  pid = fork();
+
+  if (pid < 0){
+    perror("fork()"); //log it or print it (stdout still open)
+    return false; 
+  }
+
+  if (pid > 0){ //let the parent _exit successfully
+    _exit(EXIT_SUCCESS);
+  }
 
   /* (4) Change working directory */
   if (-1 == chdir(APP_WD)) {
@@ -38,9 +65,9 @@ static bool app_initialize(int argn, char *argv[])
     return false;
   }
 
-  // (5) umask(0)
-  // (6) dup2 of 0,1,2 to /dev/null
-  
+  // (5) umask(0) : FUll file permissions
+  umask(0);
+
   /* Save the process ID */
   FILE *pidfile;
   if (!(pidfile = fopen(APP_PIDFILE, "w"))) {
@@ -52,7 +79,22 @@ static bool app_initialize(int argn, char *argv[])
   }
 
   // (6) dup2 of 0,1,2 to /dev/null
-
+  int fd = open("/dev/null", O_RDWR);
+  if (fd == -1){
+    perror("/dev/null");
+    return false;
+  }
+  
+  if((dup2(fd, STDIN_FILENO) < 0) || (dup2(fd,STDOUT_FILENO) < 0)){
+    perror("dup2()");//stdout still open, dont log it
+    return false;
+  }
+  //error check 
+  if (dup2(fd, STDERR_FILENO) < 0){
+    syslog(LOG_ERR, "dup2(): %s", strerror(errno));//stdout closed, use logfile
+    return false;
+  }
+  
   /* Initialize the cache */
   init_cache();
   
@@ -86,8 +128,17 @@ static void *worker(void *arg) {
 
   // YOUR CODE TO DECREMENT THE NUMBER OF SERVERS AND POSSIBLY START
   // ANOTHER WORKER HERE:
-  // ...
-  
+  pthread_mutex_lock(&counter_in_use);
+  n_servers--;
+
+  if (n_servers < MAX_SERVERS){
+    pthread_mutex_unlock(&counter_in_use);
+    pthread_cond_signal(&too_many_servers); //signal threads waiting on this condition to continue
+  }
+  else{
+    pthread_mutex_unlock(&counter_in_use);
+  }
+
   pthread_exit((void*)status);
 }
 
@@ -151,7 +202,11 @@ int main(int argn, char *argv[])
     }
 
     // YOUR CODE TO CHECK THE NUMBER OF SERVERS AND POSSIBLY WAIT - HERE:
-    // ...
+    pthread_mutex_lock(&counter_in_use);
+
+    while (n_servers >= MAX_SERVERS){
+      pthread_cond_wait(&too_many_servers, &counter_in_use);
+    }
     
     // Create a worker to fetch and process the request
     int *newsockfd_ptr = malloc(sizeof(int));
@@ -161,11 +216,11 @@ int main(int argn, char *argv[])
       syslog(LOG_ERR, "pthread: %s", strerror(errno));
     } else {
       // YOUR CODE TO INCREMENT THE NUMBER OF SERVERS - HERE:
-      // ...
+      n_servers++;
     }
     
     // DO NOT FORGET TO UNLOCK THE LOCK!
-    // ...
+    pthread_mutex_unlock(&counter_in_use);
   }
 
   pthread_attr_destroy(&attr);

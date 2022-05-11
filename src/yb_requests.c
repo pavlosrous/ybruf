@@ -176,6 +176,6 @@ bool process_request(int sock_id)
   doc[-1] = '.';
   process_GET(sock_id, doc - 1);
   close(sock_id);
-  
+  sleep(2);
   return true;  
 }
